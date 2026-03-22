@@ -97,6 +97,96 @@ expression fnConvertCurrency =
 Triple backticks (` ``` `) create a verbatim block for M or DAX expressions that contain characters that would otherwise conflict with TMDL syntax (colons, equals, etc.). The expression is taken literally without TMDL parsing.
 
 
+## functions.tmdl
+
+DAX user-defined functions (UDFs) -- reusable, parameterized DAX expressions that can be called from measures. Each function uses the `function` keyword, typed parameters, and the `=>` arrow syntax. Functions are defined in a separate `functions.tmdl` file (not in `expressions.tmdl`, which is for M/Power Query).
+
+### Simple Function (Inline)
+
+```tmdl
+function 'Convert.KelvinToCelsius' =
+
+		// Converts temperature in Kelvin (K) to Celsius
+		(
+		    // Temperature in Kelvins
+		    kelvin: SCALAR NUMERIC VAL
+		)
+		=>
+		    kelvin - 273.15
+```
+
+### Function with Backtick-Enclosed Body
+
+Complex functions use triple backticks to avoid TMDL parsing conflicts:
+
+```tmdl
+function 'TimeIntelligence.MonthToDate' = ```
+
+		// Cumulate month-to-date only for dates with sales
+		(
+		    measureReference: EXPR
+		)
+		=>
+		    CALCULATE (
+		        measureReference,
+		        DATESMTD ( 'Date'[Date] ),
+		        'Date'[IsDateInScope]
+		    )
+	```
+```
+
+### Function with Multiple Parameters and DAX Logic
+
+```tmdl
+function 'BusCalcs.MovingAverage' = ```
+
+		// Calculate moving average over N periods
+		(
+		    // Measure to average
+		    measureReference: EXPR,
+
+		    // Number of periods
+		    periods: INT64,
+
+		    // Date column to sort by
+		    dateColumn: COLUMN
+		)
+		=>
+		    AVERAGEX (
+		        DATESINPERIOD (
+		            dateColumn,
+		            MAX ( dateColumn ),
+		            -periods,
+		            MONTH
+		        ),
+		        measureReference
+		    )
+	```
+```
+
+### DAX Parameter Types
+
+| Type | Description | Example |
+|------|-------------|---------|
+| `EXPR` | DAX expression (measure reference) | `[Sales Amount]` |
+| `SCALAR NUMERIC VAL` | Numeric scalar value | `273.15` |
+| `INT64` | Integer | `12` |
+| `STRING` | Text value | `"PREFIX"` |
+| `ANYVAL` | Any scalar value | `1`, `"text"`, `TRUE` |
+| `COLUMN` | Column reference | `'Date'[Date]` |
+
+### Calling UDFs from Measures
+
+Functions are called by name in measure expressions:
+
+```tmdl
+measure 'Actuals MTD' = TimeIntelligence.MonthToDate ( [Actuals] )
+	formatString: #,##0
+	displayFolder: 2. MTD
+	lineageTag: abc-123
+```
+
+
 ## relationships.tmdl
 
 All relationships in one file. Each relationship has a GUID name with `fromColumn` and `toColumn` in `Table.Column` format:

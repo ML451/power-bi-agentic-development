@@ -41,6 +41,7 @@ Activate only when the Tabular Editor CLI, Power BI MCP server, or `connect-pbid
 | `database.tmdl` | Compatibility level, model ID | `definition/` |
 | `relationships.tmdl` | All relationships between tables | `definition/` |
 | `expressions.tmdl` | Shared M expressions and parameters | `definition/` |
+| `functions.tmdl` | DAX user-defined functions (reusable parameterized DAX) | `definition/` |
 | `roles.tmdl` | Security roles, RLS filter expressions, role members | `definition/` |
 | `perspectives.tmdl` | Perspective definitions and object membership | `definition/` |
 | `dataSources.tmdl` | Legacy data source definitions (if present) | `definition/` |
