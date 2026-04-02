@@ -337,14 +337,20 @@ fab job run-list "Sales.Workspace/ETL - Transform.Notebook"
 ### Monitor Lakehouse Data Freshness
 
 ```bash
-# Check gold layer tables
+# List tables and check modification dates
 fab ls "Sales.Workspace/SalesLH.Lakehouse/Tables/gold" -l
-
-# Check bronze layer tables
 fab ls "Sales.Workspace/SalesLH.Lakehouse/Tables/bronze" -l
-
-# Check latest files
 fab ls "Sales.Workspace/SalesLH.Lakehouse/Files/2025/10" -l
+
+# Query actual data freshness with DuckDB (recommended)
+WS_ID=$(fab get "Sales.Workspace" -q "id" | tr -d '"')
+LH_ID=$(fab get "Sales.Workspace/SalesLH.Lakehouse" -q "id" | tr -d '"')
+duckdb -c "
+LOAD delta; LOAD azure;
+CREATE SECRET (TYPE azure, PROVIDER credential_chain, CHAIN 'cli');
+SELECT max(order_date) as latest, count(*) as rows
+FROM delta_scan('abfss://${WS_ID}@onelake.dfs.fabric.microsoft.com/${LH_ID}/Tables/gold/orders');
+"
 ```
 
 ## Tips and Tricks

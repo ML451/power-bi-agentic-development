@@ -1,7 +1,7 @@
 ---
 name: fabric-cli
 version: 0.11.4
-description: This skill should be used when the user asks to "use the Fabric CLI", "run fab commands", "deploy Fabric items", "manage Fabric workspaces", "query a lakehouse", "refresh a semantic model via CLI", "run a Fabric notebook", "manage OneLake files", "automate Fabric operations", or mentions fab, Fabric CLI, or Fabric item management. Provides expert guidance for the fab CLI covering navigation, deployment, jobs, APIs, and automation.
+description: This skill should be used when the user asks to "use the Fabric CLI", "run fab commands", "deploy Fabric items", "manage Fabric workspaces", "query a lakehouse", "query lakehouse data", "query OneLake", "check data freshness", "validate data quality", "explore lakehouse schema", "use DuckDB with Fabric", "refresh a semantic model via CLI", "run a Fabric notebook", "manage OneLake files", "automate Fabric operations", or mentions fab, Fabric CLI, DuckDB, OneLake, or Fabric item management. Provides expert guidance for the fab CLI and DuckDB covering navigation, data querying, deployment, jobs, APIs, and automation.
 ---
 
 # Microsoft Fabric CLI Operations
@@ -16,9 +16,11 @@ Activate automatically when tasks involve:
 
 - Mention of the Fabric CLI, Fabric items, Power BI, `fab`, or `fab` commands
 - Managing workspaces, items, or resources
+- Querying lakehouse/warehouse data, checking data freshness, or validating data quality
+- Exploring lakehouse schemas and source data for semantic model design
 - Deploying or migrating semantic models, reports, notebooks, pipelines
 - Running or scheduling jobs (notebooks, pipelines, Spark)
-- Working with lakehouse/warehouse tables and data
+- Working with lakehouse/warehouse tables and files
 - Using the Fabric, Power BI, or OneLake APIs
 - Automating Fabric operations in scripts
 
@@ -79,6 +81,36 @@ MODEL_ID=$(fab get "ws.Workspace/Model.SemanticModel" -q "id" | tr -d '"')
 fab api -A powerbi "groups/$WS_ID/datasets/$MODEL_ID/refreshes" -X post -i '{"type":"Full"}'
 ```
 
+## Querying Lakehouse Data with DuckDB
+
+DuckDB can query Delta Lake tables and raw files (CSV, JSON, Parquet) directly from OneLake. This is the primary approach for data exploration, freshness checks, quality validation, and schema discovery when planning semantic model design.
+
+**Prerequisites**: DuckDB installed; Azure CLI authenticated (`az login`)
+
+```bash
+# Get IDs
+WS_ID=$(fab get "ws.Workspace" -q "id" | tr -d '"')
+LH_ID=$(fab get "ws.Workspace/LH.Lakehouse" -q "id" | tr -d '"')
+
+# Query a Delta table
+duckdb -c "
+LOAD delta; LOAD azure;
+CREATE SECRET (TYPE azure, PROVIDER credential_chain, CHAIN 'cli');
+SELECT * FROM delta_scan('abfss://${WS_ID}@onelake.dfs.fabric.microsoft.com/${LH_ID}/Tables/schema/table') LIMIT 10;
+"
+
+# Query raw files (CSV, JSON, Parquet); supports glob patterns
+duckdb -c "
+LOAD azure;
+CREATE SECRET (TYPE azure, PROVIDER credential_chain, CHAIN 'cli');
+SELECT * FROM read_csv('abfss://${WS_ID}@onelake.dfs.fabric.microsoft.com/${LH_ID}/Files/data.csv') LIMIT 10;
+"
+```
+
+Use this approach whenever investigating data issues (freshness, quality, missing records), exploring source data before building a semantic model, or validating lakehouse contents after ETL runs. The same path format works for warehouses.
+
+For full examples and common patterns, see **`references/querying-data.md`**.
+
 ## Command Reference
 
 | Command | Purpose | Example |
@@ -107,10 +139,12 @@ fab api -A powerbi "groups/$WS_ID/datasets/$MODEL_ID/refreshes" -X post -i '{"ty
 | **DAX Queries** |||
 | `fab get -q "definition"` | Get model schema first | `fab get "ws.Workspace/Model.SemanticModel" -q "definition" -f` |
 | `fab api -A powerbi` | Execute DAX | `fab api -A powerbi "groups/<ws-id>/datasets/<model-id>/executeQueries" -X post -i '{"queries":[{"query":"EVALUATE..."}]}'` |
-| **Lakehouse** |||
+| **Lakehouse / DuckDB** |||
 | `fab ls` | Browse files/tables | `fab ls "ws.Workspace/LH.Lakehouse/Files"` |
 | `fab table schema` | Get table schema | `fab table schema "ws.Workspace/LH.Lakehouse/Tables/sales"` |
 | `fab cp` | Upload/download | `fab cp ./local.csv "ws.Workspace/LH.Lakehouse/Files/"` |
+| `duckdb` + `delta_scan` | Query Delta tables | `duckdb -c "... delta_scan('abfss://<ws-id>@onelake.../<lh-id>/Tables/schema/table')"` |
+| `duckdb` + `read_csv/json` | Query raw files | `duckdb -c "... read_csv('abfss://<ws-id>@onelake.../<lh-id>/Files/data.csv')"` |
 | **Access Control** |||
 | `fab acl ls` | List permissions | `fab acl ls "ws.Workspace"` |
 | `fab acl set` | Set permissions | `fab acl set "ws.Workspace" -I <objectId> -R Member` |
@@ -334,7 +368,7 @@ fab <command> --help
 
 - [Quick Start Guide](./references/quickstart.md) - Copy-paste examples for getting started
 - [Essential Commands](./references/essential-commands.md) - Detailed command examples and common workflows
-- [Querying Data](./references/querying-data.md) - Query semantic models and lakehouse tables
+- [Querying Data](./references/querying-data.md) - Query semantic models in DAX and lakehouses or warehouses in SQL with DuckDB
 - [Lakehouses](./references/lakehouses.md) - Endpoints, file/table operations, OneLake paths
 - [Semantic Models](./references/semantic-models.md) - TMDL, DAX, refresh, storage mode
 - [Reports](./references/reports.md) - Export, import, visuals, fields

@@ -111,6 +111,29 @@ WS_ID=$(fab get "ws.Workspace" -q "id" | tr -d '"')
 fab api -X post "workspaces/$WS_ID/items" -i '{"displayName": "NewLakehouse", "type": "Lakehouse"}'
 ```
 
-## Querying Lakehouse Tables
+## Querying Lakehouse Data
 
-Lakehouse tables cannot be queried directly via API. Create a Direct Lake semantic model first, then query via DAX. See [querying-data.md](./querying-data.md) for the full workflow.
+Query lakehouse Delta tables and raw files directly using DuckDB with the `delta` and `azure` extensions. This reads from OneLake's ADLS Gen2-compatible endpoint; no semantic model required.
+
+```bash
+WS_ID=$(fab get "ws.Workspace" -q "id" | tr -d '"')
+LH_ID=$(fab get "ws.Workspace/LH.Lakehouse" -q "id" | tr -d '"')
+
+duckdb -c "
+LOAD delta; LOAD azure;
+CREATE SECRET (TYPE azure, PROVIDER credential_chain, CHAIN 'cli');
+SELECT * FROM delta_scan('abfss://${WS_ID}@onelake.dfs.fabric.microsoft.com/${LH_ID}/Tables/schema/table') LIMIT 10;
+"
+```
+
+Also works for CSV, JSON, and Parquet files under `Files/`:
+
+```bash
+duckdb -c "
+LOAD azure;
+CREATE SECRET (TYPE azure, PROVIDER credential_chain, CHAIN 'cli');
+SELECT * FROM read_csv('abfss://${WS_ID}@onelake.dfs.fabric.microsoft.com/${LH_ID}/Files/data.csv') LIMIT 10;
+"
+```
+
+For full examples including data freshness checks, quality validation, and schema discovery, see [querying-data.md](./querying-data.md).
