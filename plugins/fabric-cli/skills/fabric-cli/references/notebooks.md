@@ -39,8 +39,8 @@ nb cell rm <ws/name> <index>           Remove a cell
 nb exec <ws/name> --code "..."         Execute code interactively via Livy
   --lakehouse <name>                     Lakehouse for session (auto-detected)
   <cell-index>                           Or execute a cell by index
-nb run <ws/name> [--wait --timeout N]  Batch execution
-nb runs <ws/name>                      List run history
+nb job run <ws/name> [--wait --timeout] Batch execution
+nb job list <ws/name>                  List run history
 nb session <ws/name>                   Show active Livy sessions
 nb schedule list <ws/name>             List schedules
 nb schedule create <ws/name>           Create schedule
