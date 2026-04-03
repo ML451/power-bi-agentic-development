@@ -171,22 +171,22 @@ ORDER BY tbl;
 
 Run arbitrary PySpark or Python code on Fabric Spark compute without creating a notebook. Useful for ephemeral ETL, one-off transforms, data validation, or agent-driven compute that doesn't need a persistent artifact. Full read/write access to lakehouse Delta tables via Spark SQL.
 
-### Using `nb exec -q` (Recommended)
+### Using `nb exec code` (Recommended)
 
 The `nb` CLI (`cargo install nb-fabric`) wraps the full session lifecycle: create, wait, submit, poll, print, and cleanup. Sessions are always cleaned up, even on errors.
 
 ```bash
 # Python (default)
-nb exec -q "MyWorkspace/MyLH.Lakehouse" --code "print('hello')"
+nb exec code "MyWorkspace/MyLH.Lakehouse" "print('hello')"
 
 # PySpark (includes Spark context for SQL and DataFrames)
-nb exec -q "MyWorkspace/MyLH.Lakehouse" --pyspark --code "spark.sql('SHOW TABLES').show()"
+nb exec code "MyWorkspace/MyLH.Lakehouse" --pyspark "spark.sql('SHOW TABLES').show()"
 
 # Pipe code via stdin
-echo "spark.sql('SELECT COUNT(*) FROM gold.orders').show()" | nb exec -q "WS/LH.Lakehouse" --pyspark --code -
+echo "spark.sql('SELECT COUNT(*) FROM gold.orders').show()" | nb exec code "WS/LH.Lakehouse" --pyspark --code -
 
 # Multi-line code
-nb exec -q "MyWorkspace/MyLH.Lakehouse" --pyspark --code "
+nb exec code "MyWorkspace/MyLH.Lakehouse" --pyspark --code "
 df = spark.sql('SELECT category, COUNT(*) as n FROM products GROUP BY category ORDER BY n DESC')
 df.show()
 df.write.mode('overwrite').saveAsTable('product_summary')
@@ -330,11 +330,11 @@ finally:
 | Scenario | Use |
 |----------|-----|
 | Quick read-only exploration | DuckDB (fastest; no Spark overhead) |
-| Write data back to lakehouse | `nb exec -q --pyspark` or notebook |
-| Ephemeral transform; no persistent artifact | `nb exec -q` |
+| Write data back to lakehouse | `nb exec code --pyspark` or notebook |
+| Ephemeral transform; no persistent artifact | `nb exec code` |
 | Complex multi-cell workflow with debugging | Notebook (`nb exec` or portal) |
 | Scheduled ETL | Notebook via `fab job run` |
-| Agent-driven compute (Dagster, orchestrators) | `nb exec -q` or API directly |
+| Agent-driven compute (Dagster, orchestrators) | `nb exec code` or API directly |
 
 ## Query a Semantic Model (DAX)
 

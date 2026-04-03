@@ -4,73 +4,74 @@ Guide for working with Fabric notebooks via `fab` and [`nb`](https://github.com/
 
 ## The `nb` CLI
 
-The [`nb` CLI](https://github.com/data-goblin/nb-cli) (`cargo install nb-fabric`) extends `fab` with capabilities that `fab` does not have: **interactive cell execution with output retrieval** via the Livy API, cell-level CRUD, and proper Python/PySpark notebook creation with correct metadata.
+The [`nb` CLI](https://github.com/data-goblin/nb-cli) (`cargo install nb-fabric`) extends `fab` with capabilities that `fab` does not have: **interactive execution with output retrieval**, cell-level CRUD, and proper Python/PySpark notebook creation with correct metadata.
 
-The key differentiator: `fab job run` executes a notebook as a batch job but never returns cell output. `nb exec` creates a Livy session, submits code, and returns the output directly to the terminal.
+The key differentiator: `fab job run` executes a notebook as a batch job but never returns cell output. `nb exec` creates a session, submits code, and returns the output directly to the terminal.
 
 ```bash
-# Execute code and see the output (Python or PySpark; auto-detected from notebook)
-nb exec "My Workspace/Analytics" --code "print('hello')" --lakehouse MainLH
-# Output: hello
+# Run code directly against a lakehouse (no notebook needed)
+nb exec code "My Workspace/MainLH.Lakehouse" "print('hello')"
+nb exec code "My Workspace/MainLH.Lakehouse" --pyspark "spark.sql('SHOW TABLES').show()"
 
-# Execute a specific cell by index
-nb exec "My Workspace/Analytics" 0 --lakehouse MainLH
+# Execute a specific notebook cell by index
+nb exec cell "My Workspace/Analytics" 0 --lakehouse MainLH
 
-# Query a lakehouse table interactively
-nb exec "My Workspace/ETL" --code "df = spark.sql('SELECT count(*) FROM gold.orders'); df.show()" --lakehouse MainLH
+# Pipe code via stdin (for agents)
+echo "spark.sql('SELECT count(*) FROM gold.orders').show()" | nb exec code "WS/LH.Lakehouse" --pyspark -
 ```
 
 ### `nb` Command Reference
 
 ```
-nb auth status                         Check Azure CLI authentication
-nb list <workspace>                    List notebooks
-nb create <ws/name>                    Create notebook
-  --kernel python|pyspark                Kernel type (default: python)
-  --lakehouse <name>                     Attach lakehouse
-  --warehouse <name>                     Attach warehouse
-nb cells <ws/name>                     List all cells (index, type, preview)
-nb cell view <ws/name> <index>         View single cell source
-nb cell add <ws/name> --code "..."     Add a cell
-  --markdown                             Markdown cell (default: code)
-  --at <index>                           Insert position (default: append)
-nb cell edit <ws/name> <index> --code  Replace cell source
-nb cell rm <ws/name> <index>           Remove a cell
-nb exec <ws/name> --code "..."         Execute code interactively via Livy
-  --lakehouse <name>                     Lakehouse for session (auto-detected)
-  <cell-index>                           Or execute a cell by index
-nb job run <ws/name> [--wait --timeout] Batch execution
-nb job list <ws/name>                  List run history
-nb session <ws/name>                   Show active Livy sessions
-nb schedule list <ws/name>             List schedules
-nb schedule create <ws/name>           Create schedule
-  --type Cron|Daily|Weekly               Schedule type (default: Cron)
-  --interval <n>                         Interval (minutes for Cron)
-  --start <datetime> --enable            Start time + enable
-nb schedule update <ws/name> <id>      Update schedule
-nb schedule delete <ws/name> <id>      Delete schedule
-nb export <ws/name> -o <path>          Download .ipynb
-nb open <ws/name>                      Open in browser
-nb delete <ws/name> --force            Delete notebook
+nb auth status                                Check Azure CLI authentication
+
+nb list <workspace>                           List notebooks
+nb create <ws/name>                           Create notebook
+  --kernel python|pyspark                       Kernel type (default: python)
+  --lakehouse <name>                            Attach lakehouse
+  --warehouse <name>                            Attach warehouse
+
+nb cells <ws/name>                            List all cells (index, type, preview)
+nb cell view <ws/name> <index>                View single cell source
+nb cell add <ws/name> --code "..."            Add a cell
+  --markdown                                    Markdown cell (default: code)
+  --at <index>                                  Insert position (default: append)
+nb cell edit <ws/name> <index> --code "..."   Replace cell source
+nb cell rm <ws/name> <index>                  Remove a cell
+
+nb exec code <ws/lakehouse> <code>            Run code against a lakehouse (no notebook)
+  --pyspark                                     Use PySpark runtime (includes Spark context)
+  --python                                      Use Python runtime (default)
+nb exec cell <ws/notebook> <index>            Execute a notebook cell interactively
+  --lakehouse <name>                            Lakehouse (auto-detected from notebook)
+
+nb job run <ws/name> [--wait --timeout]       Batch execution
+nb job list <ws/name>                         List run history
+
+nb session <ws/name>                          Show active sessions
+
+nb schedule list <ws/name>                    List schedules
+nb schedule create <ws/name>                  Create schedule
+  --type Cron|Daily|Weekly                      Schedule type (default: Cron)
+  --interval <n>                                Interval (minutes for Cron)
+  --start <datetime> --enable                   Start time + enable
+nb schedule update <ws/name> <id>             Update schedule
+nb schedule delete <ws/name> <id>             Delete schedule
+
+nb export <ws/name> -o <path>                 Download .ipynb
+nb open <ws/name>                             Open in browser
+nb delete <ws/name> --force                   Delete notebook
 ```
 
 ### How `nb exec` Works
 
-`nb exec` uses the [Fabric Livy API](https://learn.microsoft.com/en-us/fabric/data-engineering/api-livy-overview) to create an interactive session, submit code, and return output:
+`nb exec` creates an interactive session, submits code, and returns output:
 
-1. Resolves workspace, notebook, and lakehouse IDs
-2. Detects kernel type from notebook metadata (`jupyter` -> `kind=python`, `synapse_pyspark` -> `kind=pyspark`)
-3. Creates a Livy session against the lakehouse
-4. Submits code as a statement
-5. Polls until `state: "available"`
-6. Prints `output.data["text/plain"]`
-7. Cleans up the session
+1. **`exec code`**: Resolves workspace and lakehouse directly; uses `--pyspark` or `--python` flag for runtime
+2. **`exec cell`**: Resolves workspace, notebook, and lakehouse; auto-detects kernel from notebook metadata
+3. Both: create a session, wait for idle, submit code, poll for result, print output, clean up session
 
-Both Python and PySpark are supported. The Livy API endpoint is:
-```
-POST /v1/workspaces/{wsId}/lakehouses/{lhId}/livyApi/versions/2023-12-01/sessions
-POST .../sessions/{id}/statements
-```
+Sessions are always cleaned up, even on errors. Exit code is non-zero when code fails. Structured metadata (session ID, runtime, duration, status) is printed to stderr.
 
 ### Install
 
@@ -100,17 +101,44 @@ nb auth status
 
 `nb` requires Azure CLI (`az`) for authentication. Run `az login` before first use.
 
-### When to Use `nb` vs `fab`
+### Notebook-less Execution
 
-| Task | Use `nb` | Use `fab` |
-|------|---------|-----------|
-| Execute code and see output | `nb exec` | Not possible |
-| View/edit individual cells | `nb cell view/add/edit/rm` | Not possible |
-| Create notebook with correct metadata | `nb create` | `fab mkdir` (no metadata) |
-| Run notebook as batch job | `nb run` or `fab job run` | `fab job run` |
-| Schedule notebooks | `nb schedule` | `fab job run-sch` |
-| Export/import notebook files | `nb export` or `fab export` | `fab export/import` |
-| Upload files, manage lakehouses | Not applicable | `fab cp`, `fab table` |
+`nb exec code` runs arbitrary PySpark/Python on Fabric Spark compute without creating a notebook. The session is created, used, and cleaned up automatically.
+
+```bash
+# Simple Python
+nb exec code "MyWorkspace/MyLH.Lakehouse" "print('hello')"
+
+# PySpark with Spark SQL
+nb exec code "MyWorkspace/MyLH.Lakehouse" --pyspark "spark.sql('SELECT count(*) FROM gold.orders').show()"
+
+# Multi-line ETL
+nb exec code "MyWorkspace/MyLH.Lakehouse" --pyspark "
+df = spark.sql('SELECT category, COUNT(*) as n FROM products GROUP BY category')
+df.write.mode('overwrite').saveAsTable('product_summary')
+print('Done')
+"
+
+# Pipe from file or script
+cat transform.py | nb exec code "MyWorkspace/MyLH.Lakehouse" --pyspark -
+```
+
+Use this when: agent-driven ephemeral ETL, one-off transforms, data validation, or any scenario where a persistent notebook artifact adds unnecessary overhead.
+
+For the direct API approach (without the `nb` CLI), see [querying-data.md](./querying-data.md#using-the-api-directly).
+
+### When to Use `nb` vs `fab` vs Livy API
+
+| Task | Use `nb` | Use `fab` | Use Livy API directly |
+|------|---------|-----------|----------------------|
+| Execute code and see output | `nb exec` | Not possible | Submit statements, poll results |
+| View/edit individual cells | `nb cell view/add/edit/rm` | Not possible | Not applicable |
+| Create notebook with correct metadata | `nb create` | `fab mkdir` (no metadata) | Not applicable |
+| Run notebook as batch job | `nb run` or `fab job run` | `fab job run` | Not applicable (use session statements) |
+| Ephemeral ETL; no artifact | Not applicable | Not applicable | Create session, submit, delete |
+| Schedule notebooks | `nb schedule` | `fab job run-sch` | Not applicable |
+| Export/import notebook files | `nb export` or `fab export` | `fab export/import` | Not applicable |
+| Upload files, manage lakehouses | Not applicable | `fab cp`, `fab table` | Not applicable |
 
 ## Choosing a Kernel
 
