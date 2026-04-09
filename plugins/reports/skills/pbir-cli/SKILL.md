@@ -9,6 +9,17 @@ Agent-first CLI for comprehensive Power BI report operations. All commands use `
 
 **IMPORTANT: Always use `pbir` CLI commands to read and modify reports. Never edit report JSON files directly, and never load the `pbir-format` skill to make changes.** The CLI handles color serialization, field type detection, schema validation, and dirty tracking that raw JSON editing bypasses. Use `pbir-format` only as a read-only reference when debugging. If a feature is not exposed by a dedicated command, use `pbir set` with dot notation.
 
+## Learning from Mistakes
+
+When a `pbir` command fails or produces unexpected results, record the correct syntax and any lessons learned in the project's memory file so the same mistake is not repeated:
+
+- **Claude Code:** `.claude/rules/pbir-cli.md` or `CLAUDE.md`
+- **Cursor:** `.cursor/rules/pbir-cli.mdc`
+- **GitHub Copilot:** `.github/copilot-instructions.md`
+- **Windsurf:** `.windsurfrules`
+
+Example entries to record: correct `publish` syntax, flags that require `-f`, commands that don't support certain options (e.g., `cat` does not support filters), user preferences for theme colors or page naming conventions.
+
 ## Path Syntax
 
 Format: `ReportName.Report/PageName.Page/VisualName.Visual`
@@ -652,6 +663,15 @@ Top-level flags -- place before the subcommand: `pbir -q new report ...`, NOT `p
 --json: machine-readable output (on find, model, validate, etc.)
 -f / --force: skip confirmation prompts (required for glob patterns in set and rm)
 ```
+
+## Common Mistakes
+
+- **`pbir cat` does not support filters or bookmarks.** Use `pbir filters list --json` or `pbir bookmarks json` instead.
+- **`pbir publish` uses positional args**, not `--workspace`. Correct: `pbir publish "Report.Report" "Workspace.Workspace/Report.Report" -f`
+- **`pbir filters list` has no `-v` flag.** Use `--json` for detailed output.
+- **Do not convert to PBIX then publish the PBIR folder.** If converting to PBIX, publish the `.pbix` file directly. If publishing PBIR, skip conversion entirely.
+- **`pbir pages rename` renames folders only** -- it does not change page IDs or display names. Use `--to` for single page folder rename.
+- **Always run `pbir <command> --help`** before using an unfamiliar command to confirm exact syntax.
 
 ## User Interaction
 
